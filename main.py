@@ -1,4 +1,7 @@
 
+EPSILON = 1e-9
+
+
 def mac(pattern, filter_values):
     """입력 패턴과 필터의 MAC 점수를 반환"""
 
@@ -13,3 +16,19 @@ def mac(pattern, filter_values):
             total += (pattern[row][col] * filter_values[row][col])
 
     return total
+
+
+def compare_scores(score_a, score_b, epsilon=EPSILON):
+    """두 점수를 비교해 A, B or UNDECIDED를 반환"""
+    abs_diff = abs(score_a - score_b)
+    if abs_diff < epsilon:
+        return "UNDECIDED"
+    elif score_a > score_b:
+        return "A"
+    else:
+        return "B"
+
+
+# def is_square_matrix(values, size):
+#     """값이 지정한 크기의 2차원 정사각형 배열인지 반환"""
+
