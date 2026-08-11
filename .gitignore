@@ -1,0 +1,7 @@
+openspec/
+.agents/
+README-PRE.md
+tests/
+TDD-PROGRESS.md
+__pycache__/
+*.pyc
