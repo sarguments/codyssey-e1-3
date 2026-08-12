@@ -1,4 +1,5 @@
 
+import json
 import time
 
 
@@ -154,13 +155,13 @@ def analyze_all_cases(patterns, filters):
     }
 
 
-def read_matrix(name, size=3, input_fn=input, output_fn=print):
+def read_matrix(name, size=3):
     """지정한 크기의 숫자 행렬을 입력받고 잘못된 입력은 다시 요청"""
     while True:
         rows = []
         for i in range(size):
             try:
-                line = input_fn(f"{name} {i + 1}행 : ")
+                line = input(f"{name} {i + 1}행 : ")
                 splited = line.split()
 
                 if len(splited) != size:
@@ -168,7 +169,7 @@ def read_matrix(name, size=3, input_fn=input, output_fn=print):
 
                 rows.append([float(item) for item in splited])
             except ValueError:
-                output_fn("입력 형식 오류: 각 줄에 3개의 숫자를 공백으로 구분해 입력하세요.")
+                print("입력 형식 오류: 각 줄에 3개의 숫자를 공백으로 구분해 입력하세요.")
                 break
 
         if len(rows) == size:
@@ -196,3 +197,80 @@ def measure_mac(pattern, filter_values, timer_fn=time.perf_counter):
         "operations": operations,
         "average_ms": (total_elapsed_seconds * 1000) / repeat_count,
     }
+
+
+def run_user_mode():
+    """3*3 사용자 입력 모드를 실행"""
+
+    filter_a = read_matrix("필터 A")
+    print("필터 A 저장 완료")
+
+    filter_b = read_matrix("필터 B")
+    print("필터 B 저장 완료")
+
+    # 3×3 패턴을 입력받는다.
+    three_pattern = read_matrix("패턴")
+
+    # A와 B 점수 및 평균 시간을 구한다.
+    a_result = measure_mac(three_pattern, filter_a)
+    b_result = measure_mac(three_pattern, filter_b)
+
+    # A/B/UNDECIDED를 판정한다.
+    decided = compare_scores(a_result["score"], b_result["score"])
+
+    # 점수, 두 측정 시간의 평균, 판정을 출력한다.
+    print(f"A 점수: {a_result['score']}")
+    print(f"B 점수: {b_result['score']}")
+    average_ms = (a_result['average_ms'] + b_result['average_ms']) / 2
+    print(f"평균 연산 시간: {average_ms} ms")
+    print(f"판정: {decided}")
+
+
+def run_json_mode(data_path="data.json"):
+    """JSON 분석 모드를 실행"""
+
+    with open(data_path, "r", encoding="utf-8") as file:
+        data = json.load(file)
+
+    filters = data["filters"]
+    patterns = data["patterns"]
+    summary = analyze_all_cases(patterns, filters)
+
+    for result in summary["results"]:
+        print(f"케이스: {result['pattern_key']}")
+        print(f"결과: {result['status']}")
+
+        if "error" in result:
+            print(f"실패 사유: {result['error']}")
+            continue
+
+        print(f"Cross 점수: {result['cross_score']}")
+        print(f"X 점수: {result['x_score']}")
+        print(f"판정: {result['prediction']}")
+        print(f"expected: {result['expected']}")
+
+    print(f"전체: {summary['total']}")
+    print(f"통과: {summary['passed']}")
+    print(f"실패: {summary['failed']}")
+
+
+def main():
+    """실행 모드를 선택해 Mini NPU 프로그램을 실행"""
+    while True:
+        print("1. 사용자 입력 (3 x 3)")
+        print("2. data.json 분석")
+        choice = input("선택: ")
+
+        if choice == "1":
+            run_user_mode()
+            return
+
+        if choice == "2":
+            run_json_mode()
+            return
+
+        print("선택 오류: 1 또는 2를 입력하세요.")
+
+
+if __name__ == "__main__":
+    main()
