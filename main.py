@@ -41,3 +41,21 @@ def is_square_matrix(values, size):
             return False
 
     return True
+
+
+def normalize_label(label):
+    """여러 형태의 라벨을 Cross 또는 X로 정규화"""
+    normalize_map = {
+        'CROSS': 'Cross',
+        'Cross': 'Cross',
+        'cross': 'Cross',
+        '+': 'Cross',
+        'X': 'X',
+        'x': 'X',
+    }
+
+    return normalize_map[label]
+
+
+# def extract_pattern_size(pattern_key):
+#     """size_{N}_{idx} 형식의 패턴 키에서 크기 N을 반환"""
