@@ -1,335 +1,103 @@
-
-"""MAC 연산으로 Cross/X 패턴을 판별하는 프로그램
-
-JSON 분석 순서
-데이터 확인 → 라벨 통일 → MAC 계산 → 판정 → expected 비교 → 결과 출력
-"""
+"""Mini NPU 콘솔 입출력과 실행 메뉴."""
 
 import json
-import time
 
-
-EPSILON = 1e-9
-
-
-def mac(pattern, filter_values):
-    """패턴과 필터의 같은 위치를 곱해 더한 MAC 점수 반환"""
-
-    total = 0
-
-    # 모든 칸을 돌며 같은 위치의 값을 곱함
-    row_len = len(pattern)
-    col_len = len(pattern[0])
-
-    for row in range(row_len):
-        for col in range(col_len):
-            total += (pattern[row][col] * filter_values[row][col])
-
-    return total
-
-
-def compare_scores(score_a, score_b, epsilon=EPSILON):
-    """두 점수를 비교해 A, B, UNDECIDED 중 하나를 반환"""
-    abs_diff = abs(score_a - score_b)
-
-    # 실수 오차를 고려해 아주 작은 차이는 동점 처리
-    if abs_diff < epsilon:
-        return "UNDECIDED"
-    elif score_a > score_b:
-        return "A"
-    else:
-        return "B"
-
-
-def validate_numeric_matrix(values, size, name):
-    """배열의 크기와 숫자 여부 확인"""
-    if not isinstance(values, list):
-        raise ValueError(f"{name}은(는) 2차원 배열이어야 합니다")
-
-    if len(values) != size:
-        raise ValueError(
-            f"{name} 행 수 불일치: {size}개가 필요하지만 {len(values)}개입니다"
-        )
-
-    for row_index, row in enumerate(values, start=1):
-        if not isinstance(row, list):
-            raise ValueError(f"{name} {row_index}행은 배열이어야 합니다")
-
-        if len(row) != size:
-            raise ValueError(
-                f"{name} {row_index}행 열 수 불일치: "
-                f"{size}개가 필요하지만 {len(row)}개입니다"
-            )
-
-        for col_index, value in enumerate(row, start=1):
-            # bool은 int로 처리되므로 따로 제외
-            if isinstance(value, bool) or not isinstance(value, (int, float)):
-                raise ValueError(
-                    f"{name} {row_index}행 {col_index}열의 값은 숫자여야 합니다"
-                )
-
-
-def normalize_label(label):
-    """JSON 라벨을 Cross 또는 X로 통일"""
-    normalize_map = {
-        'cross': 'Cross',
-        '+': 'Cross',
-        'x': 'X',
-    }
-
-    if not isinstance(label, str):
-        raise ValueError(f"라벨은 문자열이어야 합니다: {label!r}")
-    if label not in normalize_map:
-        raise ValueError(f"지원하지 않는 라벨입니다: {label!r}")
-
-    return normalize_map[label]
-
-
-def extract_pattern_size(pattern_key):
-    """size_{N}_{idx} 형식의 이름에서 배열 크기 N 추출"""
-    if not isinstance(pattern_key, str):
-        raise ValueError(f"패턴 키는 문자열이어야 합니다: {pattern_key!r}")
-
-    splited = pattern_key.split("_")
-    if(len(splited) != 3 or splited[0] != 'size'):
-        raise ValueError(
-            f"패턴 키 형식 오류: {pattern_key!r} "
-            "(예상 형식: size_{N}_{idx})"
-        )
-
-    if not splited[1].isdigit() or not splited[2].isdigit():
-        raise ValueError(
-            f"패턴 키 형식 오류: {pattern_key!r} "
-            "(N과 idx는 0 이상의 정수여야 합니다)"
-        )
-
-    size = int(splited[1])
-    if size <= 0:
-        raise ValueError(f"패턴 크기 N은 1 이상이어야 합니다: {pattern_key!r}")
-
-    return size
-
-
-def get_filters_for_size(filters, size):
-    """크기에 맞는 Cross와 X 필터 반환"""
-    filter_key = f"size_{size}"
-    if filter_key not in filters:
-        raise ValueError(f"필터 누락: {filter_key}")
-
-    raw_filters = filters[filter_key]
-    if not isinstance(raw_filters, dict):
-        raise ValueError(f"filters.{filter_key}는 JSON 객체여야 합니다")
-
-    normalized_filters = {
-        normalize_label(label): values
-        for label, values in raw_filters.items()
-    }
-
-    for required_label in ("Cross", "X"):
-        if required_label not in normalized_filters:
-            raise ValueError(f"{filter_key}에 {required_label} 필터가 없습니다")
-
-    return normalized_filters
-
-
-def extract_json_sections(data):
-    """data.json의 기본 구조를 확인하고 filters와 patterns 반환"""
-    if not isinstance(data, dict):
-        raise ValueError("data.json의 최상위 값은 JSON 객체여야 합니다")
-
-    if "filters" not in data:
-        raise ValueError("data.json에 filters 키가 없습니다")
-    if "patterns" not in data:
-        raise ValueError("data.json에 patterns 키가 없습니다")
-
-    filters = data["filters"]
-    patterns = data["patterns"]
-    if not isinstance(filters, dict):
-        raise ValueError("filters는 JSON 객체여야 합니다")
-    if not isinstance(patterns, dict):
-        raise ValueError("patterns는 JSON 객체여야 합니다")
-
-    return filters, patterns
-
-
-def analyze_case(pattern_key, case_data, filters):
-    """JSON 케이스 하나를 검사하고 점수와 PASS/FAIL 결과 반환"""
-
-    # 패턴 이름에서 크기 확인
-    N = extract_pattern_size(pattern_key)
-
-    # 계산에 필요한 input과 expected 확인
-    if not isinstance(case_data, dict):
-        raise ValueError(f"{pattern_key} 케이스는 JSON 객체여야 합니다")
-
-    if "input" not in case_data:
-        raise ValueError(f"{pattern_key}에 input 키가 없습니다")
-    if "expected" not in case_data:
-        raise ValueError(f"{pattern_key}에 expected 키가 없습니다")
-
-    # 라벨을 Cross와 X로 통일
-    expected = normalize_label(case_data['expected'])
-    use_filters = get_filters_for_size(filters, N)
-
-    # MAC 실행 전에 배열 크기와 숫자 여부 확인
-    validate_numeric_matrix(case_data["input"], N, "패턴")
-    validate_numeric_matrix(use_filters["Cross"], N, "Cross 필터")
-    validate_numeric_matrix(use_filters["X"], N, "X 필터")
-
-    # 같은 패턴을 Cross와 X 필터로 각각 계산
-    cross_score = mac(case_data['input'], use_filters['Cross'])
-    x_score = mac(case_data['input'], use_filters['X'])
-
-    # A/B 결과를 Cross/X로 변경
-    compare_result = compare_scores(cross_score, x_score)
-    if compare_result == 'A':
-        prediction = 'Cross'
-    elif compare_result == 'B':
-        prediction = 'X'
-    else:
-        prediction = 'UNDECIDED'
-
-    # 판정과 expected 비교
-    final_result = "PASS" if prediction == expected else "FAIL"
-
-    # 출력과 결과 요약에 사용할 값
-    result = {
-        "pattern_key": pattern_key,
-        "size": N,
-        "cross_score": cross_score,
-        "x_score": x_score,
-        "prediction": prediction,
-        "expected": expected,
-        "status": final_result,
-    }
-
-    if final_result == "FAIL":
-        if prediction == "UNDECIDED":
-            result["error"] = "동점(UNDECIDED) 처리 규칙에 따라 expected와 불일치"
-        else:
-            result["error"] = "prediction과 expected가 불일치"
-
-    return result
-
-
-def analyze_all_cases(patterns, filters):
-    """모든 JSON 패턴을 분석하고 전체, 통과, 실패 수 반환"""
-    results = []
-    passed = 0
-    failed = 0
-
-    for k, v in patterns.items():
-        try:
-            result = analyze_case(k, v, filters)
-            results.append(result)
-
-            if result['status'] == 'PASS':
-                passed += 1
-            else:
-                failed += 1
-        # 데이터 오류는 해당 케이스만 FAIL 처리
-        # 다른 코드 오류를 숨기지 않도록 ValueError만 처리
-        except ValueError as error:
-            error_message = str(error) or "데이터 형식 오류"
-            results.append({
-                    'pattern_key': k,
-                    'status': 'FAIL',
-                    'error': error_message
-                })
-            failed += 1
-
-    return {
-        "total": len(patterns),
-        "passed": passed,
-        "failed": failed,
-        "results": results,
-    }
+from npu import (
+    analyze_all_cases,
+    extract_json_sections,
+    get_filters_for_size,
+    measure_classification,
+    measure_mac,
+    validate_numeric_matrix,
+)
 
 
 def read_matrix(name, size=3):
     """숫자 배열을 입력받고 잘못되면 처음부터 다시 입력"""
     while True:
         rows = []
-        for i in range(size):
+        for row_index in range(size):
             try:
-                line = input(f"{name} {i + 1}행 : ")
-                splited = line.split()
+                line = input(f"{name} {row_index + 1}행: ")
+                values = line.split()
 
-                if len(splited) != size:
+                if len(values) != size:
                     raise ValueError
 
-                rows.append([float(item) for item in splited])
+                rows.append([float(value) for value in values])
             except ValueError:
-                print("입력 형식 오류: 각 줄에 3개의 숫자를 공백으로 구분해 입력하세요.")
-                # 입력 중인 배열 전체를 다시 받음
+                print(
+                    "입력 형식 오류: "
+                    f"각 줄에 {size}개의 숫자를 공백으로 구분해 입력하세요."
+                )
                 break
 
         if len(rows) == size:
             return rows
 
 
-def measure_mac(pattern, filter_values):
-    """MAC을 10회 실행한 평균 시간과 점수, 연산 횟수 반환"""
-    repeat_count = 10
-    total_elapsed_seconds = 0.0
-    score = 0
-    operations = len(pattern) * len(pattern[0])
+def print_mac_performance_table(performance_rows):
+    """필터 하나의 MAC 성능을 출력"""
+    print("크기       평균 MAC 시간(ms)    MAC 연산 횟수(N²)")
+    print("------------------------------------------------")
 
-    for _ in range(repeat_count):
-        # 입력, 출력, 파일 읽기를 빼고 MAC 계산 시간만 측정
-        start_time = time.perf_counter()
+    for size, performance, error in performance_rows:
+        size_text = f"{size} x {size}"
+        if error is not None:
+            print(f"{size_text}: 측정 불가: {error}")
+            continue
 
-        score = mac(pattern, filter_values)
+        print(
+            f"{size_text:<11}"
+            f"{performance['average_ms']:>17.6f}"
+            f"{performance['operations']:>20}"
+        )
 
-        end_time = time.perf_counter()
-        total_elapsed_seconds += end_time - start_time
 
-    return {
-        "score": score,
-        "repeats": repeat_count,
-        "operations": operations,
-        "average_ms": (total_elapsed_seconds * 1000) / repeat_count,
-    }
+def print_classification_performance_table(performance_rows):
+    """두 필터를 사용하는 전체 판정 성능을 출력"""
+    print("크기       평균 판정 시간(ms)    위치별 MAC/판정(2N²)")
+    print("-----------------------------------------------------")
+
+    for size, performance, error in performance_rows:
+        size_text = f"{size} x {size}"
+        if error is not None:
+            print(f"{size_text}: 측정 불가: {error}")
+            continue
+
+        print(
+            f"{size_text:<11}"
+            f"{performance['average_ms']:>19.6f}"
+            f"{performance['operations']:>22}"
+        )
 
 
 def run_user_mode():
-    """직접 입력한 3×3 필터 두 개와 패턴 계산"""
-
+    """직접 입력한 3x3 필터 두 개와 패턴 계산"""
     filter_a = read_matrix("필터 A")
     print("필터 A 저장 완료\n")
 
     filter_b = read_matrix("필터 B")
     print("필터 B 저장 완료\n")
 
-    three_pattern = read_matrix("패턴")
+    pattern = read_matrix("패턴")
+    performance = measure_classification(pattern, filter_a, filter_b)
+    decision = performance["decision"]
+    display_decision = "판정 불가" if decision == "UNDECIDED" else decision
 
-    # 같은 패턴을 A와 B 필터로 각각 계산
-    a_result = measure_mac(three_pattern, filter_a)
-    b_result = measure_mac(three_pattern, filter_b)
-
-    decided = compare_scores(a_result["score"], b_result["score"])
-
-    # 동점은 사용자 모드에서 판정 불가로 표시
-    display_decision = "판정 불가" if decided == "UNDECIDED" else decided
-
-    print()
-    print(f"A 점수: {a_result['score']:.16f}")
-    print(f"B 점수: {b_result['score']:.16f}")
+    print("")
+    print(f"A 점수: {performance['score_a']:.16f}")
+    print(f"B 점수: {performance['score_b']:.16f}")
     print(f"판정: {display_decision}")
 
-    average_ms = (a_result['average_ms'] + b_result['average_ms']) / 2
-    print()
-    print("성능 분석 (평균/10회)")
-    print(
-        f"3 x 3: {average_ms:.6f} ms, "
-        f"연산 횟수 {a_result['operations']}"
-    )
+    print("")
+    print("성능 분석 (판정 10회, MAC 호출 총 20회)")
+    print(f"평균 판정 시간: {performance['average_ms']:.6f} ms")
+    print_classification_performance_table([(3, performance, None)])
 
 
 def run_json_mode(data_path="data.json"):
     """data.json의 패턴을 분석하고 결과와 성능 출력"""
-
-    # 파일을 읽고 filters와 patterns 확인
     try:
         with open(data_path, "r", encoding="utf-8") as file:
             data = json.load(file)
@@ -344,15 +112,13 @@ def run_json_mode(data_path="data.json"):
         print(f"data.json 스키마 오류: {error}")
         return
 
-    # 케이스별 검증, MAC 계산, 판정, expected 비교
     summary = analyze_all_cases(patterns, filters)
 
     for index, result in enumerate(summary["results"]):
         if index > 0:
-            print()
+            print("")
         print(f"케이스: {result['pattern_key']}")
 
-        # 검증에 실패한 케이스는 점수 없이 오류만 출력
         if "cross_score" not in result:
             print(f"결과: {result['status']}")
             print(f"실패 사유: {result['error']}")
@@ -366,14 +132,26 @@ def run_json_mode(data_path="data.json"):
         if "error" in result:
             print(f"실패 사유: {result['error']}")
 
-    # 3×3은 data.json에 없어 미션의 Cross 예제로 측정
     sample_3x3 = [
         [0, 1, 0],
         [1, 1, 1],
         [0, 1, 0],
     ]
-    # 크기, 측정 결과, 오류를 한 묶음으로 저장
-    performance_rows = [(3, measure_mac(sample_3x3, sample_3x3), None)]
+    sample_x_filter = [
+        [1, 0, 1],
+        [0, 1, 0],
+        [1, 0, 1],
+    ]
+    mac_performance_rows = [(
+        3,
+        measure_mac(sample_3x3, sample_3x3),
+        None,
+    )]
+    classification_performance_rows = [(
+        3,
+        measure_classification(sample_3x3, sample_3x3, sample_x_filter),
+        None,
+    )]
 
     for size in (5, 13, 25):
         try:
@@ -390,28 +168,34 @@ def run_json_mode(data_path="data.json"):
             pattern = performance_case["input"]
             normalized_filters = get_filters_for_size(filters, size)
             cross_filter = normalized_filters["Cross"]
+            x_filter = normalized_filters["X"]
             validate_numeric_matrix(pattern, size, f"size_{size}_1 패턴")
             validate_numeric_matrix(cross_filter, size, f"size_{size} Cross 필터")
-            performance_rows.append(
+            validate_numeric_matrix(x_filter, size, f"size_{size} X 필터")
+            mac_performance_rows.append(
                 (size, measure_mac(pattern, cross_filter), None)
             )
-        # 한 크기에서 실패해도 나머지 측정은 계속 진행
+            classification_performance_rows.append(
+                (
+                    size,
+                    measure_classification(pattern, cross_filter, x_filter),
+                    None,
+                )
+            )
         except ValueError as error:
-            performance_rows.append((size, None, str(error)))
+            mac_performance_rows.append((size, None, str(error)))
+            classification_performance_rows.append((size, None, str(error)))
 
-    print("\n성능 분석 (평균/10회)")
-    for size, performance, error in performance_rows:
-        if error is not None:
-            print(f"{size} x {size}: 측정 불가 ({error})")
-            continue
+    print("")
+    print("성능 분석 (Cross MAC 10회 평균)")
+    print_mac_performance_table(mac_performance_rows)
 
-        print(
-            f"{size} x {size}: "
-            f"{performance['average_ms']:.6f} ms, "
-            f"연산 횟수 {performance['operations']}"
-        )
+    print("")
+    print("보충 성능 분석 (판정 10회, 크기별 MAC 호출 총 20회)")
+    print_classification_performance_table(classification_performance_rows)
 
-    print("\n결과 요약")
+    print("")
+    print("결과 요약")
     print(f"전체: {summary['total']}")
     print(f"통과: {summary['passed']}")
     print(f"실패: {summary['failed']}")
@@ -424,21 +208,27 @@ def run_json_mode(data_path="data.json"):
 
 
 def main():
-    """사용자 입력 모드와 JSON 분석 모드 중 하나를 선택해 실행"""
+    """종료할 때까지 사용자 입력 모드와 JSON 분석 모드를 반복 실행"""
+    print("=== Mini NPU Simulator ===")
     while True:
+        print("")
+        print("[모드 선택]")
         print("1. 사용자 입력 (3 x 3)")
         print("2. data.json 분석")
+        print("0. 종료")
         choice = input("선택: ")
 
         if choice == "1":
             run_user_mode()
-            return
-
+            continue
         if choice == "2":
             run_json_mode()
+            continue
+        if choice == "0":
+            print("프로그램을 종료합니다.")
             return
 
-        print("선택 오류: 1 또는 2를 입력하세요.\n")
+        print("선택 오류: 0, 1 또는 2를 입력하세요.")
 
 
 if __name__ == "__main__":
