@@ -301,11 +301,14 @@ def run_user_mode():
 
     # A/B/UNDECIDED를 판정한다.
     decided = compare_scores(a_result["score"], b_result["score"])
+    # 사용자 모드는 화면에서 의미를 바로 알 수 있도록 동점을 한국어로 표시한다.
+    # JSON 모드는 자동 비교를 위해 표준 값 UNDECIDED를 그대로 사용한다.
+    display_decision = "판정 불가" if decided == "UNDECIDED" else decided
 
     # 점수, 판정, 3×3 성능 분석을 출력한다.
     print(f"A 점수: {a_result['score']:.16f}")
     print(f"B 점수: {b_result['score']:.16f}")
-    print(f"판정: {decided}")
+    print(f"판정: {display_decision}")
 
     average_ms = (a_result['average_ms'] + b_result['average_ms']) / 2
     print("성능 분석 (평균/10회)")
