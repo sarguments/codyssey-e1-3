@@ -29,7 +29,7 @@ def compare_scores(score_a, score_b, epsilon=EPSILON):
 def validate_numeric_matrix(values, size, name):
     """배열의 크기와 숫자 여부 확인"""
     if not isinstance(values, list):
-        raise ValueError(f"{name}은(는) 2차원 배열이어야 합니다")
+        raise ValueError(f"{name}은 2차원 배열이어야 합니다")
 
     if len(values) != size:
         raise ValueError(

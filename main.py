@@ -38,38 +38,26 @@ def read_matrix(name, size=3):
 
 def print_mac_performance_table(performance_rows):
     """필터 하나의 MAC 성능을 출력"""
-    print("크기       평균 MAC 시간(ms)    MAC 연산 횟수(N²)")
-    print("------------------------------------------------")
-
     for size, performance, error in performance_rows:
-        size_text = f"{size} x {size}"
         if error is not None:
-            print(f"{size_text}: 측정 불가: {error}")
+            print(f"{size} x {size}: 측정 불가: {error}")
             continue
 
-        print(
-            f"{size_text:<11}"
-            f"{performance['average_ms']:>17.6f}"
-            f"{performance['operations']:>20}"
-        )
+        print(f"크기: {size} x {size}")
+        print(f"평균 MAC 시간: {performance['average_ms']:.6f} ms")
+        print(f"MAC 연산 횟수(N²): {performance['operations']}")
 
 
 def print_classification_performance_table(performance_rows):
     """두 필터를 사용하는 전체 판정 성능을 출력"""
-    print("크기       평균 판정 시간(ms)    위치별 MAC/판정(2N²)")
-    print("-----------------------------------------------------")
-
     for size, performance, error in performance_rows:
-        size_text = f"{size} x {size}"
         if error is not None:
-            print(f"{size_text}: 측정 불가: {error}")
+            print(f"{size} x {size}: 측정 불가: {error}")
             continue
 
-        print(
-            f"{size_text:<11}"
-            f"{performance['average_ms']:>19.6f}"
-            f"{performance['operations']:>22}"
-        )
+        print(f"크기: {size} x {size}")
+        print(f"평균 판정 시간: {performance['average_ms']:.6f} ms")
+        print(f"위치별 MAC/판정(2N²): {performance['operations']}")
 
 
 def run_user_mode():
@@ -92,7 +80,6 @@ def run_user_mode():
 
     print("")
     print("성능 분석 (판정 10회, MAC 호출 총 20회)")
-    print(f"평균 판정 시간: {performance['average_ms']:.6f} ms")
     print_classification_performance_table([(3, performance, None)])
 
 
