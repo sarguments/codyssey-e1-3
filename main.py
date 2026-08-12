@@ -1,4 +1,7 @@
 
+# import time
+
+
 EPSILON = 1e-9
 
 
@@ -149,3 +152,28 @@ def analyze_all_cases(patterns, filters):
         "failed": failed,
         "results": results,
     }
+
+
+def read_matrix(name, size=3, input_fn=input, output_fn=print):
+    """지정한 크기의 숫자 행렬을 입력받고 잘못된 입력은 다시 요청"""
+    while True:
+        rows = []
+        for i in range(size):
+            try:
+                line = input_fn(f"{name} {i + 1}행 : ")
+                splited = line.split()
+
+                if len(splited) != size:
+                    raise ValueError
+
+                rows.append([float(item) for item in splited])
+            except ValueError:
+                output_fn("입력 형식 오류: 각 줄에 3개의 숫자를 공백으로 구분해 입력하세요.")
+                break
+
+        if len(rows) == size:
+            return rows
+
+
+# def measure_mac(pattern, filter_values, repeats=10, timer_fn=time.perf_counter):
+#     """MAC 실행 시간을 반복 측정한 평균과 연산 정보를 반환"""
