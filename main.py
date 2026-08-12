@@ -287,10 +287,10 @@ def run_user_mode():
     """3*3 사용자 입력 모드를 실행"""
 
     filter_a = read_matrix("필터 A")
-    print("필터 A 저장 완료")
+    print("필터 A 저장 완료\n")
 
     filter_b = read_matrix("필터 B")
-    print("필터 B 저장 완료")
+    print("필터 B 저장 완료\n")
 
     # 3×3 패턴을 입력받는다.
     three_pattern = read_matrix("패턴")
@@ -306,11 +306,13 @@ def run_user_mode():
     display_decision = "판정 불가" if decided == "UNDECIDED" else decided
 
     # 점수, 판정, 3×3 성능 분석을 출력한다.
+    print()
     print(f"A 점수: {a_result['score']:.16f}")
     print(f"B 점수: {b_result['score']:.16f}")
     print(f"판정: {display_decision}")
 
     average_ms = (a_result['average_ms'] + b_result['average_ms']) / 2
+    print()
     print("성능 분석 (평균/10회)")
     print(
         f"3 x 3: {average_ms:.6f} ms, "
@@ -337,7 +339,9 @@ def run_json_mode(data_path="data.json"):
 
     summary = analyze_all_cases(patterns, filters)
 
-    for result in summary["results"]:
+    for index, result in enumerate(summary["results"]):
+        if index > 0:
+            print()
         print(f"케이스: {result['pattern_key']}")
 
         # 검증 단계에서 실패한 케이스는 MAC을 실행하지 않아 점수 키가 없다.
@@ -388,7 +392,7 @@ def run_json_mode(data_path="data.json"):
         except ValueError as error:
             performance_rows.append((size, None, str(error)))
 
-    print("성능 분석 (평균/10회)")
+    print("\n성능 분석 (평균/10회)")
     for size, performance, error in performance_rows:
         if error is not None:
             print(f"{size} x {size}: 측정 불가 ({error})")
@@ -400,7 +404,7 @@ def run_json_mode(data_path="data.json"):
             f"연산 횟수 {performance['operations']}"
         )
 
-    print("결과 요약")
+    print("\n결과 요약")
     print(f"전체: {summary['total']}")
     print(f"통과: {summary['passed']}")
     print(f"실패: {summary['failed']}")
@@ -427,7 +431,7 @@ def main():
             run_json_mode()
             return
 
-        print("선택 오류: 1 또는 2를 입력하세요.")
+        print("선택 오류: 1 또는 2를 입력하세요.\n")
 
 
 if __name__ == "__main__":
