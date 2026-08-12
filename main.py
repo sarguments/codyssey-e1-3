@@ -1,4 +1,10 @@
 
+"""MAC 연산으로 Cross/X 패턴을 판별하는 프로그램
+
+JSON 분석 순서
+데이터 확인 → 라벨 통일 → MAC 계산 → 판정 → expected 비교 → 결과 출력
+"""
+
 import json
 import time
 
@@ -7,11 +13,11 @@ EPSILON = 1e-9
 
 
 def mac(pattern, filter_values):
-    """입력 패턴과 필터의 MAC 점수를 반환"""
+    """패턴과 필터의 같은 위치를 곱해 더한 MAC 점수 반환"""
 
     total = 0
 
-    # 행 길이 구해서 그 위치의 배열에 접근한다
+    # 모든 칸을 돌며 같은 위치의 값을 곱함
     row_len = len(pattern)
     col_len = len(pattern[0])
 
@@ -23,8 +29,10 @@ def mac(pattern, filter_values):
 
 
 def compare_scores(score_a, score_b, epsilon=EPSILON):
-    """두 점수를 비교해 A, B or UNDECIDED를 반환"""
+    """두 점수를 비교해 A, B, UNDECIDED 중 하나를 반환"""
     abs_diff = abs(score_a - score_b)
+
+    # 실수 오차를 고려해 아주 작은 차이는 동점 처리
     if abs_diff < epsilon:
         return "UNDECIDED"
     elif score_a > score_b:
@@ -34,7 +42,7 @@ def compare_scores(score_a, score_b, epsilon=EPSILON):
 
 
 def validate_numeric_matrix(values, size, name):
-    """행렬의 크기와 모든 원소의 숫자 여부를 검증"""
+    """배열의 크기와 숫자 여부 확인"""
     if not isinstance(values, list):
         raise ValueError(f"{name}은(는) 2차원 배열이어야 합니다")
 
@@ -54,6 +62,7 @@ def validate_numeric_matrix(values, size, name):
             )
 
         for col_index, value in enumerate(row, start=1):
+            # bool은 int로 처리되므로 따로 제외
             if isinstance(value, bool) or not isinstance(value, (int, float)):
                 raise ValueError(
                     f"{name} {row_index}행 {col_index}열의 값은 숫자여야 합니다"
@@ -61,7 +70,7 @@ def validate_numeric_matrix(values, size, name):
 
 
 def normalize_label(label):
-    """JSON 라벨을 Cross 또는 X로 정규화"""
+    """JSON 라벨을 Cross 또는 X로 통일"""
     normalize_map = {
         'cross': 'Cross',
         '+': 'Cross',
@@ -77,7 +86,7 @@ def normalize_label(label):
 
 
 def extract_pattern_size(pattern_key):
-    """size_{N}_{idx} 형식의 패턴 키에서 크기 N을 반환"""
+    """size_{N}_{idx} 형식의 이름에서 배열 크기 N 추출"""
     if not isinstance(pattern_key, str):
         raise ValueError(f"패턴 키는 문자열이어야 합니다: {pattern_key!r}")
 
@@ -102,7 +111,7 @@ def extract_pattern_size(pattern_key):
 
 
 def get_filters_for_size(filters, size):
-    """크기에 맞는 필터를 찾아 Cross/X 표준 라벨로 반환"""
+    """크기에 맞는 Cross와 X 필터 반환"""
     filter_key = f"size_{size}"
     if filter_key not in filters:
         raise ValueError(f"필터 누락: {filter_key}")
@@ -124,7 +133,7 @@ def get_filters_for_size(filters, size):
 
 
 def extract_json_sections(data):
-    """JSON 최상위 스키마를 검증하고 filters/patterns를 반환"""
+    """data.json의 기본 구조를 확인하고 filters와 patterns 반환"""
     if not isinstance(data, dict):
         raise ValueError("data.json의 최상위 값은 JSON 객체여야 합니다")
 
@@ -144,11 +153,12 @@ def extract_json_sections(data):
 
 
 def analyze_case(pattern_key, case_data, filters):
-    """JSON 패턴 케이스 하나를 분석한 결과를 반환"""
-    # 1. 패턴 키에서 크기 N을 구한다.
+    """JSON 케이스 하나를 검사하고 점수와 PASS/FAIL 결과 반환"""
+
+    # 패턴 이름에서 크기 확인
     N = extract_pattern_size(pattern_key)
 
-    # 2. 케이스의 필수 키를 확인하고 라벨을 정규화한다.
+    # 계산에 필요한 input과 expected 확인
     if not isinstance(case_data, dict):
         raise ValueError(f"{pattern_key} 케이스는 JSON 객체여야 합니다")
 
@@ -157,22 +167,20 @@ def analyze_case(pattern_key, case_data, filters):
     if "expected" not in case_data:
         raise ValueError(f"{pattern_key}에 expected 키가 없습니다")
 
-    # 판정과 비교하기 전에 expected를 표준 라벨로 정규화한다.
+    # 라벨을 Cross와 X로 통일
     expected = normalize_label(case_data['expected'])
-
-    # JSON의 cross/x 키도 내부 표준 라벨인 Cross/X로 통일한다.
     use_filters = get_filters_for_size(filters, N)
 
-    # 3. 케이스의 `input`과 필터 두 개가 모두 올바른 정사각형인지 확인한다.
+    # MAC 실행 전에 배열 크기와 숫자 여부 확인
     validate_numeric_matrix(case_data["input"], N, "패턴")
     validate_numeric_matrix(use_filters["Cross"], N, "Cross 필터")
     validate_numeric_matrix(use_filters["X"], N, "X 필터")
-    
-    # 4. Cross 점수와 X 점수를 구한다.
+
+    # 같은 패턴을 Cross와 X 필터로 각각 계산
     cross_score = mac(case_data['input'], use_filters['Cross'])
     x_score = mac(case_data['input'], use_filters['X'])
 
-    # 5. `compare_scores()` 결과 A/B를 Cross/X로 바꾼다. 동점은 UNDECIDED를 유지한다.
+    # A/B 결과를 Cross/X로 변경
     compare_result = compare_scores(cross_score, x_score)
     if compare_result == 'A':
         prediction = 'Cross'
@@ -181,10 +189,10 @@ def analyze_case(pattern_key, case_data, filters):
     else:
         prediction = 'UNDECIDED'
 
-    # 6. prediction과 이미 정규화된 expected를 비교해 PASS 또는 FAIL을 정한다.
+    # 판정과 expected 비교
     final_result = "PASS" if prediction == expected else "FAIL"
 
-    # 7. 출력과 테스트에 사용할 결과 딕셔너리를 반환한다.
+    # 출력과 결과 요약에 사용할 값
     result = {
         "pattern_key": pattern_key,
         "size": N,
@@ -203,8 +211,9 @@ def analyze_case(pattern_key, case_data, filters):
 
     return result
 
+
 def analyze_all_cases(patterns, filters):
-    """모든 JSON 패턴을 분석하고 성공과 실패 요약을 반환"""
+    """모든 JSON 패턴을 분석하고 전체, 통과, 실패 수 반환"""
     results = []
     passed = 0
     failed = 0
@@ -218,7 +227,8 @@ def analyze_all_cases(patterns, filters):
                 passed += 1
             else:
                 failed += 1
-        # 예상 가능한 데이터 오류만 격리하고 프로그래밍 오류는 숨기지 않는다.
+        # 데이터 오류는 해당 케이스만 FAIL 처리
+        # 다른 코드 오류를 숨기지 않도록 ValueError만 처리
         except ValueError as error:
             error_message = str(error) or "데이터 형식 오류"
             results.append({
@@ -228,7 +238,6 @@ def analyze_all_cases(patterns, filters):
                 })
             failed += 1
 
-    # 종합 결과 리턴
     return {
         "total": len(patterns),
         "passed": passed,
@@ -238,7 +247,7 @@ def analyze_all_cases(patterns, filters):
 
 
 def read_matrix(name, size=3):
-    """지정한 크기의 숫자 행렬을 입력받고 잘못된 입력은 다시 요청"""
+    """숫자 배열을 입력받고 잘못되면 처음부터 다시 입력"""
     while True:
         rows = []
         for i in range(size):
@@ -252,7 +261,7 @@ def read_matrix(name, size=3):
                 rows.append([float(item) for item in splited])
             except ValueError:
                 print("입력 형식 오류: 각 줄에 3개의 숫자를 공백으로 구분해 입력하세요.")
-                # 현재 rows를 버리고 바깥 반복문에서 배열 전체를 다시 받는다.
+                # 입력 중인 배열 전체를 다시 받음
                 break
 
         if len(rows) == size:
@@ -260,14 +269,14 @@ def read_matrix(name, size=3):
 
 
 def measure_mac(pattern, filter_values):
-    """MAC 실행 시간을 반복 측정한 평균과 연산 정보를 반환"""
+    """MAC을 10회 실행한 평균 시간과 점수, 연산 횟수 반환"""
     repeat_count = 10
     total_elapsed_seconds = 0.0
     score = 0
     operations = len(pattern) * len(pattern[0])
 
     for _ in range(repeat_count):
-        # 입력과 출력은 제외하고 MAC 함수 호출 구간만 측정한다.
+        # 입력, 출력, 파일 읽기를 빼고 MAC 계산 시간만 측정
         start_time = time.perf_counter()
 
         score = mac(pattern, filter_values)
@@ -284,7 +293,7 @@ def measure_mac(pattern, filter_values):
 
 
 def run_user_mode():
-    """3*3 사용자 입력 모드를 실행"""
+    """직접 입력한 3×3 필터 두 개와 패턴 계산"""
 
     filter_a = read_matrix("필터 A")
     print("필터 A 저장 완료\n")
@@ -292,20 +301,17 @@ def run_user_mode():
     filter_b = read_matrix("필터 B")
     print("필터 B 저장 완료\n")
 
-    # 3×3 패턴을 입력받는다.
     three_pattern = read_matrix("패턴")
 
-    # A와 B 점수 및 평균 시간을 구한다.
+    # 같은 패턴을 A와 B 필터로 각각 계산
     a_result = measure_mac(three_pattern, filter_a)
     b_result = measure_mac(three_pattern, filter_b)
 
-    # A/B/UNDECIDED를 판정한다.
     decided = compare_scores(a_result["score"], b_result["score"])
-    # 사용자 모드는 화면에서 의미를 바로 알 수 있도록 동점을 한국어로 표시한다.
-    # JSON 모드는 자동 비교를 위해 표준 값 UNDECIDED를 그대로 사용한다.
+
+    # 동점은 사용자 모드에서 판정 불가로 표시
     display_decision = "판정 불가" if decided == "UNDECIDED" else decided
 
-    # 점수, 판정, 3×3 성능 분석을 출력한다.
     print()
     print(f"A 점수: {a_result['score']:.16f}")
     print(f"B 점수: {b_result['score']:.16f}")
@@ -321,8 +327,9 @@ def run_user_mode():
 
 
 def run_json_mode(data_path="data.json"):
-    """JSON 분석 모드를 실행"""
+    """data.json의 패턴을 분석하고 결과와 성능 출력"""
 
+    # 파일을 읽고 filters와 patterns 확인
     try:
         with open(data_path, "r", encoding="utf-8") as file:
             data = json.load(file)
@@ -337,6 +344,7 @@ def run_json_mode(data_path="data.json"):
         print(f"data.json 스키마 오류: {error}")
         return
 
+    # 케이스별 검증, MAC 계산, 판정, expected 비교
     summary = analyze_all_cases(patterns, filters)
 
     for index, result in enumerate(summary["results"]):
@@ -344,7 +352,7 @@ def run_json_mode(data_path="data.json"):
             print()
         print(f"케이스: {result['pattern_key']}")
 
-        # 검증 단계에서 실패한 케이스는 MAC을 실행하지 않아 점수 키가 없다.
+        # 검증에 실패한 케이스는 점수 없이 오류만 출력
         if "cross_score" not in result:
             print(f"결과: {result['status']}")
             print(f"실패 사유: {result['error']}")
@@ -358,14 +366,13 @@ def run_json_mode(data_path="data.json"):
         if "error" in result:
             print(f"실패 사유: {result['error']}")
 
-    # data.json에는 3×3 데이터가 없으므로 미션 문제에 있던 Cross 예제를 사용한다.
+    # 3×3은 data.json에 없어 미션의 Cross 예제로 측정
     sample_3x3 = [
         [0, 1, 0],
         [1, 1, 1],
         [0, 1, 0],
     ]
-    # (크기, MAC 측정 결과, 오류 메시지) 형식으로 3×3 성능 결과를 먼저 저장한다.
-    # 정상 측정이므로 오류 메시지는 None이다.
+    # 크기, 측정 결과, 오류를 한 묶음으로 저장
     performance_rows = [(3, measure_mac(sample_3x3, sample_3x3), None)]
 
     for size in (5, 13, 25):
@@ -388,7 +395,7 @@ def run_json_mode(data_path="data.json"):
             performance_rows.append(
                 (size, measure_mac(pattern, cross_filter), None)
             )
-        # 한 크기의 데이터가 잘못돼도 나머지 성능과 결과 요약은 출력한다.
+        # 한 크기에서 실패해도 나머지 측정은 계속 진행
         except ValueError as error:
             performance_rows.append((size, None, str(error)))
 
@@ -417,7 +424,7 @@ def run_json_mode(data_path="data.json"):
 
 
 def main():
-    """실행 모드를 선택해 Mini NPU 프로그램을 실행"""
+    """사용자 입력 모드와 JSON 분석 모드 중 하나를 선택해 실행"""
     while True:
         print("1. 사용자 입력 (3 x 3)")
         print("2. data.json 분석")
