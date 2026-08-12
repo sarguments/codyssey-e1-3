@@ -145,9 +145,10 @@ def extract_json_sections(data):
 
 def analyze_case(pattern_key, case_data, filters):
     """JSON 패턴 케이스 하나를 분석한 결과를 반환"""
-    # 1. 패턴 키에서 크기 N 을 구한다.
+    # 1. 패턴 키에서 크기 N을 구한다.
     N = extract_pattern_size(pattern_key)
 
+    # 2. 케이스의 필수 키를 확인하고 라벨을 정규화한다.
     if not isinstance(case_data, dict):
         raise ValueError(f"{pattern_key} 케이스는 JSON 객체여야 합니다")
 
@@ -155,6 +156,9 @@ def analyze_case(pattern_key, case_data, filters):
         raise ValueError(f"{pattern_key}에 input 키가 없습니다")
     if "expected" not in case_data:
         raise ValueError(f"{pattern_key}에 expected 키가 없습니다")
+
+    # 판정과 비교하기 전에 expected를 표준 라벨로 정규화한다.
+    expected = normalize_label(case_data['expected'])
 
     # JSON의 cross/x 키도 내부 표준 라벨인 Cross/X로 통일한다.
     use_filters = get_filters_for_size(filters, N)
@@ -177,13 +181,10 @@ def analyze_case(pattern_key, case_data, filters):
     else:
         prediction = 'UNDECIDED'
 
-    # 6. `normalize_label()`로 expected를 표준화한다.
-    expected = normalize_label(case_data['expected'])
-
-    # 7. prediction과 expected를 비교해 PASS 또는 FAIL을 정한다.
+    # 6. prediction과 이미 정규화된 expected를 비교해 PASS 또는 FAIL을 정한다.
     final_result = "PASS" if prediction == expected else "FAIL"
 
-    # 8. 테스트에 적힌 키를 가진 결과 딕셔너리를 반환한다.
+    # 7. 출력과 테스트에 사용할 결과 딕셔너리를 반환한다.
     result = {
         "pattern_key": pattern_key,
         "size": N,
@@ -300,13 +301,11 @@ def run_user_mode():
 
     # A/B/UNDECIDED를 판정한다.
     decided = compare_scores(a_result["score"], b_result["score"])
-    # JSON 모드와 달리 사용자 모드에서는 동점을 한국어로 표시한다.
-    display_decision = "판정 불가" if decided == "UNDECIDED" else decided
 
     # 점수, 판정, 3×3 성능 분석을 출력한다.
     print(f"A 점수: {a_result['score']:.16f}")
     print(f"B 점수: {b_result['score']:.16f}")
-    print(f"판정: {display_decision}")
+    print(f"판정: {decided}")
 
     average_ms = (a_result['average_ms'] + b_result['average_ms']) / 2
     print("성능 분석 (평균/10회)")
