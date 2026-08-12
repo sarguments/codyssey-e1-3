@@ -67,3 +67,56 @@ def extract_pattern_size(pattern_key):
         raise ValueError
 
     return int(splited[1])
+
+
+def analyze_case(pattern_key, case_data, filters):
+    """JSON 패턴 케이스 하나를 분석한 결과를 반환"""
+    # 1. 패턴 키에서 크기 N 을 구한다.
+    N = extract_pattern_size(pattern_key)
+
+    # 2. `size_{N}` 키로 같은 크기의 필터 묶음을 가져온다.
+    use_filtrs = filters[f"size_{N}"]
+
+    # 3. 케이스의 `input`과 필터 두 개가 모두 올바른 정사각형인지 확인한다.
+    if not is_square_matrix(case_data["input"], N):
+        raise ValueError("패턴 크기가 올바르지 않습니다")
+
+    if not is_square_matrix(use_filtrs["cross"], N):
+        raise ValueError("Cross 필터 크기가 올바르지 않습니다")
+
+    if not is_square_matrix(use_filtrs["x"], N):
+        raise ValueError("X 필터 크기가 올바르지 않습니다")
+    
+    # 4. Cross 점수와 X 점수를 구한다.
+    cross_score = mac(case_data['input'], use_filtrs['cross'])
+    x_score = mac(case_data['input'], use_filtrs['x'])
+
+    # 5. `compare_scores()` 결과 A/B를 Cross/X로 바꾼다. 동점은 UNDECIDED를 유지한다.
+    prediction = 'UNDECIDED'
+    compare_result = compare_scores(cross_score, x_score)
+    if compare_result == 'A':
+        prediction = 'Cross'
+    elif compare_result == 'B':
+        prediction = 'X'
+    else:
+        prediction = 'UNDECIDED'
+
+    # 6. `normalize_label()`로 expected를 표준화한다.
+    expected = normalize_label(case_data['expected'])
+
+    # 7. prediction과 expected를 비교해 PASS 또는 FAIL을 정한다.
+    final_result = "PASS" if prediction == expected else "FAIL"
+
+    # 8. 테스트에 적힌 키를 가진 결과 딕셔너리를 반환한다.
+    return {
+        "pattern_key": pattern_key,
+        "size": N,
+        "cross_score": cross_score,
+        "x_score": x_score,
+        "prediction": prediction,
+        "expected": expected,
+        "status": final_result,
+    }
+
+# def analyze_all_cases(patterns, filters):
+#     """모든 JSON 패턴을 분석하고 성공과 실패 요약을 반환"""
