@@ -118,5 +118,34 @@ def analyze_case(pattern_key, case_data, filters):
         "status": final_result,
     }
 
-# def analyze_all_cases(patterns, filters):
-#     """모든 JSON 패턴을 분석하고 성공과 실패 요약을 반환"""
+def analyze_all_cases(patterns, filters):
+    """모든 JSON 패턴을 분석하고 성공과 실패 요약을 반환"""
+    results = []
+    passed = 0
+    failed = 0
+
+    for k, v in patterns.items():
+        try:
+            result = analyze_case(k, v, filters)
+            results.append(result)
+
+            if result['status'] == 'PASS':
+                passed += 1
+            else:
+                failed += 1
+        except (ValueError, KeyError, TypeError) as error:
+            # 알려진 에러인 경우 FAIL 처리, 에러 텍스트 포함
+            results.append({
+                    'pattern_key': k,
+                    'status': 'FAIL',
+                    'error': str(error)
+                })
+            failed += 1
+
+    # 종합 결과 리턴
+    return {
+        "total": len(patterns),
+        "passed": passed,
+        "failed": failed,
+        "results": results,
+    }
