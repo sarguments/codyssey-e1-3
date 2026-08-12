@@ -5,3 +5,5 @@ tests/
 TDD-PROGRESS.md
 __pycache__/
 *.pyc
+.vscode/
+MEMO.md

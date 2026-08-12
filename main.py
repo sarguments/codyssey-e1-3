@@ -57,5 +57,13 @@ def normalize_label(label):
     return normalize_map[label]
 
 
-# def extract_pattern_size(pattern_key):
-#     """size_{N}_{idx} 형식의 패턴 키에서 크기 N을 반환"""
+def extract_pattern_size(pattern_key):
+    """size_{N}_{idx} 형식의 패턴 키에서 크기 N을 반환"""
+    splited = pattern_key.split("_")
+    if(len(splited) != 3 or splited[0] != 'size'):
+        raise ValueError
+
+    if not splited[1].isdigit() or not splited[2].isdigit():
+        raise ValueError
+
+    return int(splited[1])
