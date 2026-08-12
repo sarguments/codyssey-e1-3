@@ -29,6 +29,15 @@ def compare_scores(score_a, score_b, epsilon=EPSILON):
         return "B"
 
 
-# def is_square_matrix(values, size):
-#     """값이 지정한 크기의 2차원 정사각형 배열인지 반환"""
+def is_square_matrix(values, size):
+    """값이 지정한 크기의 2차원 정사각형 배열인지 반환"""
+    # 행 갯수와 열 갯수 같은지 확인
 
+    if len(values) != size:
+        return False
+
+    for row in values:
+        if len(row) != size:
+            return False
+
+    return True
