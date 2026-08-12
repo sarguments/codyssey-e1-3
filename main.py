@@ -1,5 +1,5 @@
 
-# import time
+import time
 
 
 EPSILON = 1e-9
@@ -175,5 +175,24 @@ def read_matrix(name, size=3, input_fn=input, output_fn=print):
             return rows
 
 
-# def measure_mac(pattern, filter_values, repeats=10, timer_fn=time.perf_counter):
-#     """MAC 실행 시간을 반복 측정한 평균과 연산 정보를 반환"""
+def measure_mac(pattern, filter_values, timer_fn=time.perf_counter):
+    """MAC 실행 시간을 반복 측정한 평균과 연산 정보를 반환"""
+    repeat_count = 10
+    total_elapsed_seconds = 0.0
+    score = 0
+    operations = len(pattern) * len(pattern[0])
+
+    for _ in range(repeat_count):
+        start_time = timer_fn()
+
+        score = mac(pattern, filter_values)
+
+        end_time = timer_fn()
+        total_elapsed_seconds += end_time - start_time
+
+    return {
+        "score": score,
+        "repeats": repeat_count,
+        "operations": operations,
+        "average_ms": (total_elapsed_seconds * 1000) / repeat_count,
+    }
