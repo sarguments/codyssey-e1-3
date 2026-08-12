@@ -63,11 +63,11 @@ def normalize_label(label):
     }
 
     if not isinstance(label, str):
-        raise ValueError(f"라벨은 문자열이어야 합니다: {label!r}")
+        raise ValueError(f"라벨은 문자열이어야 합니다: {label}")
 
     normalized_label = label.strip().lower()
     if normalized_label not in normalize_map:
-        raise ValueError(f"지원하지 않는 라벨입니다: {label!r}")
+        raise ValueError(f"지원하지 않는 라벨입니다: {label}")
 
     return normalize_map[normalized_label]
 
@@ -75,24 +75,24 @@ def normalize_label(label):
 def extract_pattern_size(pattern_key):
     """size_{N}_{idx} 형식의 이름에서 배열 크기 N 추출"""
     if not isinstance(pattern_key, str):
-        raise ValueError(f"패턴 키는 문자열이어야 합니다: {pattern_key!r}")
+        raise ValueError(f"패턴 키는 문자열이어야 합니다: {pattern_key}")
 
     parts = pattern_key.split("_")
     if len(parts) != 3 or parts[0] != "size":
         raise ValueError(
-            f"패턴 키 형식 오류: {pattern_key!r} "
-            "(예상 형식: size_{N}_{idx})"
+            f"패턴 키 형식 오류: {pattern_key} "
+            "(size_{N}_{idx} 여야 합니다.)"
         )
 
     if not parts[1].isdigit() or not parts[2].isdigit():
         raise ValueError(
-            f"패턴 키 형식 오류: {pattern_key!r} "
+            f"패턴 키 형식 오류: {pattern_key} "
             "(N과 idx는 0 이상의 정수여야 합니다)"
         )
 
     size = int(parts[1])
     if size <= 0:
-        raise ValueError(f"패턴 크기 N은 1 이상이어야 합니다: {pattern_key!r}")
+        raise ValueError(f"패턴 크기 N은 1 이상이어야 합니다: {pattern_key}")
 
     return size
 
@@ -100,6 +100,7 @@ def extract_pattern_size(pattern_key):
 def get_filters_for_size(filters, size):
     """크기에 맞는 Cross와 X 필터 반환"""
     filter_key = f"size_{size}"
+    # 각 키, 필터 등은 참조 전에 검증 먼저
     if filter_key not in filters:
         raise ValueError(f"필터 누락: {filter_key}")
 
@@ -112,6 +113,7 @@ def get_filters_for_size(filters, size):
         for label, values in raw_filters.items()
     }
 
+    # 필수 라벨 체크
     for required_label in ("Cross", "X"):
         if required_label not in normalized_filters:
             raise ValueError(f"{filter_key}에 {required_label} 필터가 없습니다")
@@ -121,6 +123,7 @@ def get_filters_for_size(filters, size):
 
 def extract_json_sections(data):
     """data.json의 기본 구조를 확인하고 filters와 patterns 반환"""
+    # 검증 먼저
     if not isinstance(data, dict):
         raise ValueError("data.json의 최상위 값은 JSON 객체여야 합니다")
     if "filters" not in data:
@@ -142,6 +145,7 @@ def analyze_case(pattern_key, case_data, filters):
     """JSON 케이스 하나를 검사하고 점수와 PASS/FAIL 결과 반환"""
     size = extract_pattern_size(pattern_key)
 
+    # 검증 먼저
     if not isinstance(case_data, dict):
         raise ValueError(f"{pattern_key} 케이스는 JSON 객체여야 합니다")
     if "input" not in case_data:
@@ -203,6 +207,7 @@ def analyze_all_cases(patterns, filters):
             else:
                 failed += 1
         except ValueError as error:
+            # 여기서 수많은 에러를 한번에 결과에 추가한다
             results.append({
                 "pattern_key": pattern_key,
                 "status": "FAIL",
@@ -256,6 +261,8 @@ def measure_mac(pattern, filter_values):
     for _ in range(repeat_count):
         start_time = time.perf_counter()
         score = mac(pattern, filter_values)
+
+        # 경과 시간 : end_time - start_time
         end_time = time.perf_counter()
         total_elapsed_seconds += end_time - start_time
 

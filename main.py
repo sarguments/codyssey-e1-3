@@ -38,7 +38,10 @@ def read_matrix(name, size=3):
 
 def print_mac_performance_table(performance_rows):
     """필터 하나의 MAC 성능을 출력"""
-    for size, performance, error in performance_rows:
+    for row in performance_rows:
+        size = row["size"]
+        performance = row["performance"]
+        error = row["error"]
         if error is not None:
             print(f"{size} x {size}: 측정 불가: {error}")
             continue
@@ -50,9 +53,13 @@ def print_mac_performance_table(performance_rows):
 
 def print_classification_performance_table(performance_rows):
     """두 필터를 사용하는 전체 판정 성능을 출력"""
-    for size, performance, error in performance_rows:
+    for row in performance_rows:
+        size = row["size"]
+        performance = row["performance"]
+        error = row["error"]
         if error is not None:
             print(f"{size} x {size}: 측정 불가: {error}")
+            # error 인 경우 상세 정보 출력 패스
             continue
 
         print(f"크기: {size} x {size}")
@@ -71,6 +78,7 @@ def run_user_mode():
     pattern = read_matrix("패턴")
     performance = measure_classification(pattern, filter_a, filter_b)
     decision = performance["decision"]
+    # 사용자 모드에서만 'UNDECIDED' 대신 '판정 불가'
     display_decision = "판정 불가" if decision == "UNDECIDED" else decision
 
     print("")
@@ -80,7 +88,12 @@ def run_user_mode():
 
     print("")
     print("성능 분석 (판정 10회, MAC 호출 총 20회)")
-    print_classification_performance_table([(3, performance, None)])
+    performance_rows = [{
+        "size": 3,
+        "performance": performance,
+        "error": None,
+    }]
+    print_classification_performance_table(performance_rows)
 
 
 def run_json_mode(data_path="data.json"):
@@ -119,6 +132,7 @@ def run_json_mode(data_path="data.json"):
         if "error" in result:
             print(f"실패 사유: {result['error']}")
 
+    # 기본 data.json 에 3x3 이 존재하지 않아 예제에 있던 3x3 사용
     sample_3x3 = [
         [0, 1, 0],
         [1, 1, 1],
@@ -129,16 +143,20 @@ def run_json_mode(data_path="data.json"):
         [0, 1, 0],
         [1, 0, 1],
     ]
-    mac_performance_rows = [(
-        3,
-        measure_mac(sample_3x3, sample_3x3),
-        None,
-    )]
-    classification_performance_rows = [(
-        3,
-        measure_classification(sample_3x3, sample_3x3, sample_x_filter),
-        None,
-    )]
+    mac_performance_rows = [{
+        "size": 3,
+        "performance": measure_mac(sample_3x3, sample_3x3),
+        "error": None,
+    }]
+    classification_performance_rows = [{
+        "size": 3,
+        "performance": measure_classification(
+            sample_3x3,
+            sample_3x3,
+            sample_x_filter,
+        ),
+        "error": None,
+    }]
 
     for size in (5, 13, 25):
         try:
@@ -159,19 +177,32 @@ def run_json_mode(data_path="data.json"):
             validate_numeric_matrix(pattern, size, f"size_{size}_1 패턴")
             validate_numeric_matrix(cross_filter, size, f"size_{size} Cross 필터")
             validate_numeric_matrix(x_filter, size, f"size_{size} X 필터")
-            mac_performance_rows.append(
-                (size, measure_mac(pattern, cross_filter), None)
-            )
-            classification_performance_rows.append(
-                (
-                    size,
-                    measure_classification(pattern, cross_filter, x_filter),
-                    None,
-                )
-            )
+
+            # 성능 분석 (Cross MAC 10회 평균)
+            mac_performance_rows.append({
+                "size": size,
+                "performance": measure_mac(pattern, cross_filter),
+                "error": None,
+            })
+
+            # 보충 성능 분석 (판정 10회, 크기별 MAC 호출 총 20회)
+            classification_performance_rows.append({
+                "size": size,
+                "performance": measure_classification(
+                    pattern,
+                    cross_filter,
+                    x_filter,
+                ),
+                "error": None,
+            })
         except ValueError as error:
-            mac_performance_rows.append((size, None, str(error)))
-            classification_performance_rows.append((size, None, str(error)))
+            error_row = {
+                "size": size,
+                "performance": None,
+                "error": str(error),
+            }
+            mac_performance_rows.append(error_row)
+            classification_performance_rows.append(error_row.copy())
 
     print("")
     print("성능 분석 (Cross MAC 10회 평균)")
