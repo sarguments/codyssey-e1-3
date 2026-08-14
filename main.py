@@ -158,6 +158,8 @@ def run_json_mode(data_path="data.json"):
         "error": None,
     }]
 
+    # 3x3은 위의 예제 행렬로 이미 측정했으므로, data.json에 준비된
+    # 나머지 크기(5x5, 13x13, 25x25)의 첫 번째 케이스로 성능을 비교한다.
     for size in (5, 13, 25):
         try:
             performance_key = f"size_{size}_1"
