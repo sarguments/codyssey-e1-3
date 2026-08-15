@@ -223,34 +223,6 @@ def analyze_all_cases(patterns, filters):
     }
 
 
-def measure_classification(pattern, filter_a, filter_b):
-    """두 필터를 사용하는 판정을 10회 실행해 평균 시간과 결과 반환"""
-    repeat_count = 10
-    total_elapsed_seconds = 0.0
-    score_a = 0
-    score_b = 0
-    decision = "UNDECIDED"
-    operations_per_classification = 2 * len(pattern) * len(pattern[0])
-
-    for _ in range(repeat_count):
-        start_time = time.perf_counter()
-        score_a = mac(pattern, filter_a)
-        score_b = mac(pattern, filter_b)
-        decision = compare_scores(score_a, score_b)
-        end_time = time.perf_counter()
-        total_elapsed_seconds += end_time - start_time
-
-    return {
-        "score_a": score_a,
-        "score_b": score_b,
-        "decision": decision,
-        "repeats": repeat_count,
-        "mac_calls": repeat_count * 2,
-        "operations": operations_per_classification,
-        "average_ms": (total_elapsed_seconds * 1000) / repeat_count,
-    }
-
-
 def measure_mac(pattern, filter_values):
     """필터 하나의 MAC을 10회 실행해 평균 시간과 결과 반환"""
     repeat_count = 10

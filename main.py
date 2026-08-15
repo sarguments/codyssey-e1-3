@@ -4,9 +4,10 @@ import json
 
 from npu import (
     analyze_all_cases,
+    compare_scores,
     extract_json_sections,
     get_filters_for_size,
-    measure_classification,
+    mac,
     measure_mac,
     validate_numeric_matrix,
 )
@@ -51,22 +52,6 @@ def print_mac_performance_table(performance_rows):
         print(f"MAC 연산 횟수(N²): {performance['operations']}")
 
 
-def print_classification_performance_table(performance_rows):
-    """두 필터를 사용하는 전체 판정 성능을 출력"""
-    for row in performance_rows:
-        size = row["size"]
-        performance = row["performance"]
-        error = row["error"]
-        if error is not None:
-            print(f"{size} x {size}: 측정 불가: {error}")
-            # error 인 경우 상세 정보 출력 패스
-            continue
-
-        print(f"크기: {size} x {size}")
-        print(f"평균 판정 시간: {performance['average_ms']:.6f} ms")
-        print(f"위치별 MAC/판정(2N²): {performance['operations']}")
-
-
 def run_user_mode():
     """직접 입력한 3x3 필터 두 개와 패턴 계산"""
     filter_a = read_matrix("필터 A")
@@ -76,24 +61,28 @@ def run_user_mode():
     print("필터 B 저장 완료\n")
 
     pattern = read_matrix("패턴")
-    performance = measure_classification(pattern, filter_a, filter_b)
-    decision = performance["decision"]
+    filter_a_performance = measure_mac(pattern, filter_a)
+    filter_b_score = mac(pattern, filter_b)
+    decision = compare_scores(
+        filter_a_performance["score"],
+        filter_b_score,
+    )
     # 사용자 모드에서만 'UNDECIDED' 대신 '판정 불가'
     display_decision = "판정 불가" if decision == "UNDECIDED" else decision
 
     print("")
-    print(f"A 점수: {performance['score_a']:.16f}")
-    print(f"B 점수: {performance['score_b']:.16f}")
+    print(f"A 점수: {filter_a_performance['score']:.16f}")
+    print(f"B 점수: {filter_b_score:.16f}")
     print(f"판정: {display_decision}")
 
     print("")
-    print("성능 분석 (판정 10회, MAC 호출 총 20회)")
+    print("성능 분석 (필터 A의 MAC 10회 평균)")
     performance_rows = [{
         "size": 3,
-        "performance": performance,
+        "performance": filter_a_performance,
         "error": None,
     }]
-    print_classification_performance_table(performance_rows)
+    print_mac_performance_table(performance_rows)
 
 
 def run_json_mode(data_path="data.json"):
@@ -138,23 +127,9 @@ def run_json_mode(data_path="data.json"):
         [1, 1, 1],
         [0, 1, 0],
     ]
-    sample_x_filter = [
-        [1, 0, 1],
-        [0, 1, 0],
-        [1, 0, 1],
-    ]
     mac_performance_rows = [{
         "size": 3,
         "performance": measure_mac(sample_3x3, sample_3x3),
-        "error": None,
-    }]
-    classification_performance_rows = [{
-        "size": 3,
-        "performance": measure_classification(
-            sample_3x3,
-            sample_3x3,
-            sample_x_filter,
-        ),
         "error": None,
     }]
 
@@ -175,26 +150,13 @@ def run_json_mode(data_path="data.json"):
             pattern = performance_case["input"]
             normalized_filters = get_filters_for_size(filters, size)
             cross_filter = normalized_filters["Cross"]
-            x_filter = normalized_filters["X"]
             validate_numeric_matrix(pattern, size, f"size_{size}_1 패턴")
             validate_numeric_matrix(cross_filter, size, f"size_{size} Cross 필터")
-            validate_numeric_matrix(x_filter, size, f"size_{size} X 필터")
 
             # 성능 분석 (Cross MAC 10회 평균)
             mac_performance_rows.append({
                 "size": size,
                 "performance": measure_mac(pattern, cross_filter),
-                "error": None,
-            })
-
-            # 보충 성능 분석 (판정 10회, 크기별 MAC 호출 총 20회)
-            classification_performance_rows.append({
-                "size": size,
-                "performance": measure_classification(
-                    pattern,
-                    cross_filter,
-                    x_filter,
-                ),
                 "error": None,
             })
         except ValueError as error:
@@ -204,15 +166,10 @@ def run_json_mode(data_path="data.json"):
                 "error": str(error),
             }
             mac_performance_rows.append(error_row)
-            classification_performance_rows.append(error_row.copy())
 
     print("")
-    print("성능 분석 (Cross MAC 10회 평균)")
+    print("성능 분석 (필터 하나의 MAC 10회 평균)")
     print_mac_performance_table(mac_performance_rows)
-
-    print("")
-    print("보충 성능 분석 (판정 10회, 크기별 MAC 호출 총 20회)")
-    print_classification_performance_table(classification_performance_rows)
 
     print("")
     print("결과 요약")
