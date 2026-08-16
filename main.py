@@ -4,8 +4,10 @@ import json
 
 from npu import (
     analyze_all_cases,
+    compare_mac_performance,
     compare_scores,
     extract_json_sections,
+    generate_pattern,
     get_filters_for_size,
     mac,
     measure_mac,
@@ -37,6 +39,53 @@ def read_matrix(name, size=3):
             return rows
 
 
+def read_positive_int(prompt):
+    """1 이상의 정수를 입력받고 잘못되면 다시 입력"""
+    while True:
+        try:
+            value = int(input(prompt))
+        except ValueError:
+            print("입력 오류: 1 이상의 정수를 입력하세요.")
+            continue
+
+        if value < 1:
+            print("입력 오류: 1 이상의 정수를 입력하세요.")
+            continue
+
+        return value
+
+
+def read_generated_pattern(size):
+    """지원하는 라벨을 입력받아 지정한 크기의 패턴 생성"""
+    while True:
+        label = input("패턴 종류 (Cross/X): ")
+        try:
+            return generate_pattern(size, label)
+        except ValueError as error:
+            print(f"입력 오류: {error}")
+
+
+def read_pattern_for_user_mode(size=3):
+    """사용자 모드의 패턴을 직접 입력하거나 자동 생성"""
+    while True:
+        print("[패턴 입력 방식]")
+        print("1. 직접 입력")
+        print("2. Cross/X 자동 생성")
+        choice = input("선택: ")
+
+        if choice == "1":
+            return read_matrix("패턴", size)
+
+        if choice == "2":
+            pattern = read_generated_pattern(size)
+            print("")
+            print(f"생성된 {size} x {size} 패턴")
+            print_pattern(pattern)
+            return pattern
+
+        print("선택 오류: 1 또는 2를 입력하세요.")
+
+
 def print_mac_performance_table(performance_rows):
     """필터 하나의 MAC 성능을 출력"""
     for row in performance_rows:
@@ -52,6 +101,26 @@ def print_mac_performance_table(performance_rows):
         print(f"MAC 연산 횟수(N²): {performance['operations']}")
 
 
+def print_pattern(pattern):
+    """생성한 패턴을 행 단위로 출력"""
+    for row in pattern:
+        print(" ".join(str(value) for value in row))
+
+
+def print_mac_comparison(comparison):
+    """2차원 접근과 1차원 접근의 MAC 성능 비교 출력"""
+    print(f"반복 횟수: {comparison['repeats']}")
+    print(f"MAC 연산 횟수(N²): {comparison['operations']}")
+    print(
+        "2차원 배열 평균 MAC 시간: "
+        f"{comparison['two_dimensional_average_ms']:.6f} ms"
+    )
+    print(
+        "1차원 배열 평균 MAC 시간: "
+        f"{comparison['flat_average_ms']:.6f} ms"
+    )
+
+
 def run_user_mode():
     """직접 입력한 3x3 필터 두 개와 패턴 계산"""
     filter_a = read_matrix("필터 A")
@@ -60,7 +129,8 @@ def run_user_mode():
     filter_b = read_matrix("필터 B")
     print("필터 B 저장 완료\n")
 
-    pattern = read_matrix("패턴")
+    # 직접 입력뿐 아니라 패턴 생성기의 3 x 3 결과도 같은 계산에 사용한다.
+    pattern = read_pattern_for_user_mode(size=3)
     filter_a_performance = measure_mac(pattern, filter_a)
     filter_b_score = mac(pattern, filter_b)
     decision = compare_scores(
@@ -184,14 +254,31 @@ def run_json_mode(data_path="data.json"):
                 print(f"- {result['pattern_key']}: {result['error']}")
 
 
+def run_pattern_generator_mode():
+    """Cross 또는 X 패턴을 만들고 두 MAC 접근 방식 비교"""
+    size = read_positive_int("패턴 크기 N: ")
+    pattern = read_generated_pattern(size)
+
+    print("")
+    print(f"생성된 {size} x {size} 패턴")
+    print_pattern(pattern)
+
+    # 생성한 패턴을 입력과 필터로 함께 사용해 두 MAC의 접근 방식만 비교
+    comparison = compare_mac_performance(pattern, pattern)
+    print("")
+    print("메모리 접근 방식별 MAC 성능 비교")
+    print_mac_comparison(comparison)
+
+
 def main():
-    """종료할 때까지 사용자 입력 모드와 JSON 분석 모드를 반복 실행"""
+    """종료할 때까지 Mini NPU의 세 모드를 반복 실행"""
     print("=== Mini NPU Simulator ===")
     while True:
         print("")
         print("[모드 선택]")
         print("1. 사용자 입력 (3 x 3)")
         print("2. data.json 분석")
+        print("3. 패턴 생성기와 MAC 최적화 비교")
         print("0. 종료")
         choice = input("선택: ")
 
@@ -201,11 +288,14 @@ def main():
         if choice == "2":
             run_json_mode()
             continue
+        if choice == "3":
+            run_pattern_generator_mode()
+            continue
         if choice == "0":
             print("프로그램을 종료합니다.")
             return
 
-        print("선택 오류: 0, 1 또는 2를 입력하세요.")
+        print("선택 오류: 0, 1, 2 또는 3을 입력하세요.")
 
 
 if __name__ == "__main__":

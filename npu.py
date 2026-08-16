@@ -17,6 +17,70 @@ def mac(pattern, filter_values):
     return total
 
 
+def flatten_matrix(matrix):
+    """2차원 배열을 행 순서대로 읽어 1차원 배열로 반환"""
+    flattened = []
+
+    for row in matrix:
+        for value in row:
+            flattened.append(value)
+
+    return flattened
+
+
+def mac_flat(flat_pattern, flat_filter_values):
+    """길이가 같은 1차원 배열 두 개의 MAC 점수 반환"""
+    if len(flat_pattern) != len(flat_filter_values):
+        raise ValueError("패턴과 필터의 길이가 같아야 합니다")
+
+    total = 0
+    # 2차원 MAC의 row, col 대신 하나의 index로
+    for index in range(len(flat_pattern)):
+        total += flat_pattern[index] * flat_filter_values[index]
+
+    return total
+
+
+def compare_mac_performance(pattern, filter_values, repeat_count=10):
+    """같은 입력으로 2차원 MAC과 1차원 MAC의 평균 시간 비교"""
+    if isinstance(repeat_count, bool) or not isinstance(repeat_count, int):
+        raise ValueError("반복 횟수는 1 이상의 정수여야 합니다")
+    if repeat_count < 1:
+        raise ValueError("반복 횟수는 1 이상의 정수여야 합니다")
+
+    # 변환 시간을 제외하고 MAC 접근 방식만 비교하도록
+    flat_pattern = flatten_matrix(pattern)
+    flat_filter_values = flatten_matrix(filter_values)
+
+    two_dimensional_total_seconds = 0.0
+    two_dimensional_score = 0
+    for _ in range(repeat_count):
+        start_time = time.perf_counter()
+        two_dimensional_score = mac(pattern, filter_values)
+        end_time = time.perf_counter()
+        two_dimensional_total_seconds += end_time - start_time
+
+    # 같은 입력과 반복 횟수로 1차원 MAC도 측정
+    flat_total_seconds = 0.0
+    flat_score = 0
+    for _ in range(repeat_count):
+        start_time = time.perf_counter()
+        flat_score = mac_flat(flat_pattern, flat_filter_values)
+        end_time = time.perf_counter()
+        flat_total_seconds += end_time - start_time
+
+    return {
+        "two_dimensional_score": two_dimensional_score,
+        "flat_score": flat_score,
+        "repeats": repeat_count,
+        "operations": len(flat_pattern),
+        "two_dimensional_average_ms": (
+            two_dimensional_total_seconds * 1000 / repeat_count
+        ),
+        "flat_average_ms": flat_total_seconds * 1000 / repeat_count,
+    }
+
+
 def compare_scores(score_a, score_b, epsilon=EPSILON):
     """두 점수를 비교해 A, B, UNDECIDED 중 하나를 반환"""
     if abs(score_a - score_b) < epsilon:
@@ -70,6 +134,47 @@ def normalize_label(label):
         raise ValueError(f"지원하지 않는 라벨입니다: {label}")
 
     return normalize_map[normalized_label]
+
+
+def generate_pattern(size, label):
+    """크기와 라벨에 맞는 Cross 또는 X 패턴 생성"""
+    if isinstance(size, bool) or not isinstance(size, int) or size < 1:
+        raise ValueError("패턴 크기는 1 이상의 정수여야 합니다")
+
+    normalized_label = normalize_label(label)
+    center_indexes = []
+
+    # 홀수는 가운데가 하나고, 짝수는 가운데가 두 개
+    if size % 2 == 0:
+        center_indexes.append(size // 2 - 1)
+        center_indexes.append(size // 2)
+    else:
+        center_indexes.append(size // 2)
+
+    pattern = []
+    # N x N의 모든 좌표를 확인
+    for row_index in range(size):
+        row = []
+        for col_index in range(size):
+            if normalized_label == "Cross":
+                # 가운데 행 또는 가운데 열에 있으면 Cross 위치
+                is_pattern_position = (
+                    row_index in center_indexes
+                    or col_index in center_indexes
+                )
+            else:
+                # 두 대각선 중 하나에 있으면 X 위치
+                is_pattern_position = (
+                    row_index == col_index
+                    or row_index + col_index == size - 1
+                )
+
+            # 패턴에 포함되는 좌표는 1, 나머지는 0으로
+            row.append(1 if is_pattern_position else 0)
+
+        pattern.append(row)
+
+    return pattern
 
 
 def extract_pattern_size(pattern_key):
