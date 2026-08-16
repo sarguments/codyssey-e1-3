@@ -11,7 +11,6 @@ codyssey-e1-3/
 ├── main.py
 ├── npu.py
 ├── data.json
-├── explain.md
 └── README.md
 ```
 
@@ -20,7 +19,6 @@ codyssey-e1-3/
 | `main.py` | 메뉴, 사용자 입력, 결과 및 성능 표 출력 |
 | `npu.py` | MAC 계산, 검증, JSON 분석, 패턴 생성, 성능 측정 |
 | `data.json` | 크기별 필터와 테스트 패턴 |
-| `explain.md` | 핵심 개념과 코드 동작을 초심자 수준으로 설명 |
 
 ## 판정 원리
 
