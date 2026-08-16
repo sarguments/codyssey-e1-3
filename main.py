@@ -191,12 +191,8 @@ def run_json_mode(data_path="data.json"):
         if "error" in result:
             print(f"실패 사유: {result['error']}")
 
-    # 기본 data.json 에 3x3 이 존재하지 않아 예제에 있던 3x3 사용
-    sample_3x3 = [
-        [0, 1, 0],
-        [1, 1, 1],
-        [0, 1, 0],
-    ]
+    # data.json에 없는 3 x 3 Cross는 패턴 생성기로 준비해 성능 분석에 재사용한다.
+    sample_3x3 = generate_pattern(3, "Cross")
     mac_performance_rows = [{
         "size": 3,
         "performance": measure_mac(sample_3x3, sample_3x3),
